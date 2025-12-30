@@ -35,7 +35,6 @@ def make_sample_feature_table(*, root: Path | None = None, n_users: int = 50, se
         }
     )
 
-    ext = best_effort_ext()
-    out_path = paths.data_processed_dir / f"features{ext}"
+    out_path = paths.data_processed_dir / "features.csv"
     write_tabular(df, out_path)
     return out_path
