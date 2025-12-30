@@ -1,0 +1,1207 @@
+---
+pagetitle: "W3 D1"
+date: 2025-12-28
+---
+
+# Day 1: Data contract + CLI skeleton
+
+**Goal:** turn a feature table into a **clear dataset contract** and a runnable **CLI skeleton**.
+
+::: {.muted}
+Bootcamp • SDAIA Academy
+:::
+
+::: {.notes}
+Say: “By the end of today, everyone can run `ml-baseline --help`, generate sample data, and write a draft model card.”
+:::
+
+---
+
+## Today’s Flow
+
+* **Session 1 (60m):** From “model” → “system” (what we’re shipping)
+* *Asr Prayer (20m)*
+* **Session 2 (60m):** Dataset contract (X/y, IDs, leakage, schema)
+* *Maghrib Prayer (20m)*
+* **Session 3 (60m):** CLI + repo conventions (Typer, paths, logging)
+* *Isha Prayer (20m)*
+* **Hands-on (120m):** Build Day 1 deliverables in the Week 3 repo
+
+---
+
+## Learning Objectives
+
+By the end of today, you can:
+
+* Explain the difference between an ML **model** and an ML **system**
+* Define **unit of analysis**, **target**, and **ID passthrough** columns
+* Describe **leakage** and name 3 common leakage patterns
+* Write a minimal **input schema contract** for batch inference
+* Run the Week 3 repo via CLI and create a draft **model card**
+
+---
+
+## Announcements / admin
+
+* This week ends with a **GitHub repo submission** (portfolio-ready)
+* You should push **at least 1 commit per day**
+* Hidden tests exist: make changes that are **deterministic** and **reproducible**
+
+::: callout-note
+Capstone teams + ideas are finalized by **Week 5 (Jan 15, 2026)**.
+:::
+
+---
+
+## End-state demo (what you’ll run by Friday)
+
+**Train**
+
+```bash
+uv run ml-baseline train --target <your_target>
+```
+
+**Predict**
+
+```bash
+uv run ml-baseline predict --run latest --input <file> --output outputs/preds.csv
+```
+
+::: {.muted}
+Today we only focus on: data contract + CLI basics.
+:::
+
+---
+
+## Week 3 project: what “done” looks like
+
+By Friday, your repo can:
+
+* Read `data/processed/features.<csv|parquet>`
+* Train a baseline model and save a **run folder** under `models/runs/<run_id>/`
+* Save artifacts: model, schema, metrics, holdout tables, env snapshot
+* Batch predict with schema guardrails
+* Explain results in `reports/model_card.md` + `reports/eval_summary.md`
+
+---
+
+## Tool stack (minimal, high ROI)
+
+**Core (everyone)**
+
+* Python, pandas, numpy
+* scikit-learn, joblib
+* typer, logging
+* pytest, ruff
+
+**Optional (stretch)**
+
+* pyarrow (Parquet), plotly+kaleido (plots)
+
+---
+
+## Repo tour (what matters today)
+
+```text
+week3-ml-baseline-system/
+  data/processed/        # feature table lives here
+  src/ml_baseline/       # real code (CLI + library)
+  reports/               # model_card.md will be created today
+  tests/                 # visible checks (more hidden tests exist)
+```
+
+---
+
+## How grading works (Week 3)
+
+* **We run your CLI** (help must work, predictable flags)
+* **We run your tests** (`pytest`) + style (`ruff`)
+* Hidden tests check:
+
+  * deterministic outputs (seeded)
+  * correct file locations
+  * helpful errors (fail fast)
+
+# Session 1
+
+::: {.muted}
+From “I trained a model” → “I shipped a baseline ML system”
+:::
+
+---
+
+## Session 1 objectives
+
+* Define what “ship-ready baseline” means
+* Write a problem spec: unit of analysis + target + decision
+* Recognize leakage (cheating) before it happens
+
+---
+
+## Model vs system
+
+:::: {.columns}
+::: {.column width="50%"}
+**A model**
+
+* a fitted object (weights)
+* lives in memory
+* works on the data you already have
+:::
+
+::: {.column width="50%"}
+**A system**
+
+* a repeatable pipeline (data → model → artifacts)
+* saves outputs to disk
+* can be run by someone else
+:::
+::::
+
+---
+
+## Why we build a baseline system first
+
+* You cannot improve what you cannot **measure**
+* A baseline gives you a **floor** (minimum performance)
+* A system makes progress **repeatable** (not “it worked once”)
+
+::: callout-tip
+Baselines are boring on purpose. Boring is reliable.
+:::
+
+---
+
+## The Week 3 loop
+
+```text
+Define → Split → Baseline → Train → Evaluate → Save → Predict → Report
+```
+
+::: {.muted}
+Today: we focus on Define + “dataset contract” + CLI.
+:::
+
+---
+
+## Offline-first rule
+
+* Your training reads only from `data/processed/…`
+* No web calls, no external services
+* Your repo must run on a CPU laptop
+
+::: callout-warning
+If your model needs internet to run, it is not shippable for this bootcamp.
+:::
+
+---
+
+## Problem framing: start with the decision
+
+A good ML spec answers:
+
+* **What decision changes** because of the prediction?
+* What costs more: **false positives** or **false negatives**?
+* What constraints exist (CPU, batch vs online, feature availability)?
+
+---
+
+## Unit of analysis (UoA)
+
+**Unit of analysis = one row = one prediction decision.**
+
+Examples:
+
+* one row per **user**
+* one row per **transaction**
+* one row per **day per store**
+
+::: callout-note
+If your unit of analysis is wrong, your evaluation becomes meaningless.
+:::
+
+---
+
+## Target column
+
+The target is the thing you want to predict.
+
+* Classification: label (e.g., `is_fraud`)
+* Regression: number (e.g., `amount_spent_next_7d`)
+
+::: callout-tip
+Name targets clearly: `is_*`, `has_*`, `*_usd`, `*_days`.
+:::
+
+---
+
+## Positive class (binary classification)
+
+If your target is 0/1:
+
+* Define what **1** means (the “positive” class)
+* Report the **positive rate** (class balance)
+
+::: callout-warning
+If positives are rare, accuracy can lie to you.
+:::
+
+---
+
+## Metrics follow the decision
+
+* If false positives are costly → prefer **precision**
+* If false negatives are costly → prefer **recall**
+* For rare positives → report **PR-AUC** (later this week)
+
+::: {.muted}
+Today: just choose a reasonable “primary metric” in your model card draft.
+:::
+
+---
+
+## Baseline mindset (preview)
+
+Before you tune anything:
+
+* run a **dummy baseline** (majority / mean)
+* write the baseline metrics down
+* only then: train a real model
+
+::: callout-note
+We start baselines tomorrow. Today you set up the *inputs* and *contracts*.
+:::
+
+---
+
+## Micro-exercise: write the ML spec (6 minutes)
+
+Pick *any* dataset idea (or use our sample).
+
+Fill in:
+
+1. Unit of analysis = _______
+2. Target column = _______
+3. Positive class (if binary) = _______
+4. Decision enabled = _______
+5. One constraint = _______
+
+**Checkpoint:** you can say the spec in one sentence.
+
+---
+
+## Solution (example ML spec)
+
+* Unit of analysis: **one row per user**
+* Target: `is_high_value` (1 = high value user)
+* Decision: who gets a retention offer
+* Constraint: batch inference, CPU-only
+
+---
+
+## Leakage: “cheating” without noticing
+
+Leakage happens when your features include information that would not exist at prediction time.
+
+Two common symptoms:
+
+* “Amazing” metrics that feel too good
+* Big train vs holdout gap (later)
+
+---
+
+## Common leakage patterns (tabular)
+
+* **Future-known** features (post-event info)
+* **Target proxies** (almost the label)
+* **IDs** (unique identifiers that models memorize)
+* **Time leakage** (random split on time-ordered data)
+
+---
+
+## IDs are not features
+
+IDs can be useful, but usually only for:
+
+* joining data
+* grouping splits
+* passing through predictions for joining back
+
+::: callout-warning
+If you let IDs into the model, it can “memorize” instead of “learn”.
+:::
+
+---
+
+## Micro-exercise: spot the leakage (6 minutes)
+
+You have a table with columns:
+
+* `user_id`, `country`, `n_orders`, `total_amount`, `refund_flag`, `is_high_value`
+
+1. Which is the **ID**?
+2. Which is the **target**?
+3. Which column is suspicious for leakage?
+
+**Checkpoint:** you can justify your answers.
+
+---
+
+## Solution: spot the leakage
+
+1. ID: `user_id`
+2. Target: `is_high_value`
+3. Suspicious: `refund_flag` (often known after the outcome, or a proxy)
+
+::: {.muted}
+Even if it’s not leakage in your data, treat “post-event” fields as suspicious until proven safe.
+:::
+
+---
+
+## Quick Check
+
+**Question:** Why is “random split” dangerous for time-based prediction?
+
+. . .
+
+**Answer:** it lets future patterns leak into training, inflating metrics.
+
+---
+
+## Checkpoint
+
+Raise your hand when you can:
+
+* define **unit of analysis** in 1 sentence
+* explain **leakage** in 1 sentence
+* name one ID column from your own dataset idea
+
+::: {.notes}
+Walk around and spot-check 3 students. Ask them to point at the column names in their table.
+:::
+
+---
+
+## Session 1 recap
+
+* A model is not a system; a system is repeatable + shippable
+* Start with a clear **spec**: UoA + target + decision
+* Treat leakage as a first-class risk
+
+# Asr break {.splash}
+
+## 20 minutes
+
+**When you return:** open the Week 3 repo and locate `data/processed/features.*`.
+
+# Session 2
+
+::: {.muted}
+Dataset readiness + input schema contract
+:::
+
+---
+
+## Session 2 objectives
+
+* Turn a feature table into **X/y** safely
+* Separate **features vs IDs vs target**
+* Write a minimal **input schema** for inference
+* Add 2 “ML readiness” QA gates
+
+---
+
+## Feature table assumptions (from Week 2)
+
+* One row per unit of analysis
+* Regenerable (idempotent)
+* Stored under `data/processed/`
+* Safe to use offline
+
+::: callout-tip
+Week 3 does not start from raw data. It starts from the feature table.
+:::
+
+---
+
+## Turning a feature table into X and y
+
+* **y** = the target column
+* **X** = everything else (except IDs)
+
+Two rules:
+
+* drop rows where target is missing (for training)
+* never let target appear at inference time
+
+---
+
+## Example: X/y split (pandas)
+
+```python
+target = "is_high_value"
+
+y = df[target]
+X = df.drop(columns=[target])
+```
+
+::: {.muted}
+We will also drop ID columns from X.
+:::
+
+---
+
+## Feature availability at prediction time
+
+Ask for each feature:
+
+* Do we know this **before** the decision?
+* Is it stable, or does it change after the event?
+* Could it be a “target proxy”?
+
+::: callout-warning
+A feature can be perfectly correlated and still be unusable in production.
+:::
+
+---
+
+## IDs: drop vs passthrough
+
+:::: {.columns}
+::: {.column width="50%"}
+**Drop from features**
+
+* `user_id`
+* `order_id`
+* `device_id`
+:::
+
+::: {.column width="50%"}
+**Keep as passthrough**
+
+* so predictions can be joined back
+* but never required for inference
+:::
+::::
+
+---
+
+## Micro-exercise: classify columns (5 minutes)
+
+Columns:
+
+* `user_id`, `country`, `n_orders`, `avg_amount`, `is_high_value`
+
+1. Target = ?
+2. ID passthrough = ?
+3. Required features = ?
+
+**Checkpoint:** you have 3 lists.
+
+---
+
+## Solution: classify columns
+
+* Target: `is_high_value`
+* Optional ID passthrough: `user_id`
+* Required features: `country`, `n_orders`, `avg_amount`
+
+---
+
+## Missingness: choose a policy
+
+Two beginner-friendly options:
+
+1. **Impute** (median/mode)
+2. Add **missingness flags** (feature is missing on purpose)
+
+::: callout-note
+There is no universal “best” choice. The key is to be consistent and document it.
+:::
+
+---
+
+## Dtype drift: CSV vs Parquet
+
+* CSV can silently turn numbers into strings
+* Parquet preserves types (more reliable)
+
+::: callout-tip
+This repo supports CSV by default and Parquet as a stretch (optional dependency).
+:::
+
+---
+
+## Quick Check
+
+**Question:** What’s the main risk of using CSV-only pipelines?
+
+. . .
+
+**Answer:** dtype drift (numbers become strings), leading to broken features.
+
+---
+
+## Data contract: what it is
+
+A data contract is a promise:
+
+* What columns must exist
+* What types they should have
+* What columns are forbidden (like the target)
+
+::: {.muted}
+In Week 3, this is an “input schema” saved with every training run.
+:::
+
+---
+
+## Input schema: required vs optional vs forbidden
+
+* **Required features:** model inputs (must be present)
+* **Optional IDs:** kept if present (for joining back)
+* **Forbidden columns:** must not appear at inference input (e.g., target)
+
+---
+
+## Minimal schema JSON (example)
+
+```json
+{
+  "required_feature_columns": ["country", "n_orders", "avg_amount"],
+  "optional_id_columns": ["user_id"],
+  "forbidden_columns": ["is_high_value"]
+}
+```
+
+---
+
+## Micro-exercise: write your schema (6 minutes)
+
+Using your own dataset idea (or sample):
+
+1. List 3–10 **required feature columns**
+2. List 0–3 **optional ID columns**
+3. List **forbidden** columns (at least the target)
+
+**Checkpoint:** you have a JSON-shaped draft (doesn’t need perfect dtypes yet).
+
+---
+
+## Solution (example schema)
+
+```json
+{
+  "required_feature_columns": ["country", "n_orders", "avg_amount", "total_amount"],
+  "optional_id_columns": ["user_id"],
+  "forbidden_columns": ["is_high_value"]
+}
+```
+
+---
+
+## QA gates: minimum checks before modeling
+
+You should be able to say “yes” to:
+
+* table is not empty
+* target exists
+* no duplicate rows for your key (if you have one)
+* required columns exist
+
+::: callout-warning
+Fail fast today, so you don’t debug mystery metrics tomorrow.
+:::
+
+---
+
+## Code pattern: 2 must-have checks {.smaller}
+
+def require_columns(df, cols):
+missing = [c for c in cols if c not in df.columns]
+assert not missing, f"Missing columns: {missing}"
+
+def assert_no_duplicate_key(df, key_cols):
+dup = df.duplicated(subset=key_cols, keep=False)
+assert not dup.any(), f"Duplicate rows for key={key_cols} (n={dup.sum()})"
+
+---
+
+## Micro-exercise: predict the failure (4 minutes)
+
+Scenario:
+
+* Your inference input accidentally contains the target column `is_high_value`
+
+What should your predict code do?
+
+**Checkpoint:** one sentence answer.
+
+---
+
+## Solution: predict the failure
+
+It should **fail fast** with a clear message:
+
+* “Forbidden columns present in inference input: ['is_high_value']”
+
+---
+
+## Session 2 recap
+
+* X/y split must drop target (and usually IDs) from X
+* A schema contract prevents “silent” inference bugs
+* Add small QA gates early (columns + duplicates)
+
+# Maghrib break {.splash}
+
+## 20 minutes
+
+**When you return:** run `ml-baseline --help` and find the `make-sample-data` command.
+
+# Session 3
+
+::: {.muted}
+CLI + repo conventions (Typer, paths, logging)
+:::
+
+---
+
+## Session 3 objectives
+
+* Explain why we use a CLI (not only notebooks)
+* Understand Typer commands + options
+* Know where files go (paths + artifacts)
+* Follow repo standards: logging, naming, tests
+
+---
+
+## Why a CLI?
+
+A CLI gives you:
+
+* **repeatability** (“same command, same result”)
+* easy grading (we can run it)
+* easy collaboration (teammates can run it)
+
+::: callout-tip
+If a teammate can’t run it from the README, it’s not shipped.
+:::
+
+---
+
+## Our CLI commands (Week 3)
+
+* `ml-baseline make-sample-data`
+* `ml-baseline train`
+* `ml-baseline predict`
+* `ml-baseline show-run`
+
+::: {.muted}
+Today: you will run `--help` and `make-sample-data`.
+:::
+
+---
+
+## Typer mental model
+
+* `app = typer.Typer()`
+* `@app.command()` makes a subcommand
+* options become CLI flags (`--target`, `--input`, `--output`)
+
+---
+
+## Tiny Typer example
+
+```python
+import typer
+app = typer.Typer()
+
+@app.command()
+def hello(name: str = "world"):
+    typer.echo(f"hello {name}")
+```
+
+::: {.muted}
+Your repo uses the same idea, just with more commands.
+:::
+
+---
+
+## Micro-exercise: read `--help` (4 minutes)
+
+1. Run `ml-baseline --help`
+2. Find the subcommand list
+3. Find one flag under `make-sample-data`
+
+**Checkpoint:** you can name 1 command and 1 flag.
+
+---
+
+## Solution: what you should see
+
+You should see commands like:
+
+* `make-sample-data`
+* `train`
+* `predict`
+
+And options (examples):
+
+* `--target`
+* `--input`
+* `--output`
+
+---
+
+## Repo paths: define them once
+
+The goal: no hard-coded strings everywhere.
+
+```python
+from pathlib import Path
+
+class Paths:
+    def __init__(self, root: Path):
+        self.root = root
+
+    @property
+    def data_processed_dir(self) -> Path:
+        return self.root / "data" / "processed"
+```
+
+---
+
+## Artifacts vs scratch outputs
+
+* `models/runs/<run_id>/...` = versioned run artifacts (important)
+* `outputs/` = scratch files (safe to delete)
+
+::: callout-note
+Keep your repo clean: don’t commit huge generated artifacts unless asked.
+:::
+
+---
+
+## Logging: what to log
+
+Log these at minimum:
+
+* input paths
+* output paths
+* row counts (“loaded 10,000 rows”)
+* run folder location
+
+---
+
+## Logging snippet (copy pattern)
+
+```python
+import logging
+log = logging.getLogger(__name__)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s %(name)s: %(message)s"
+)
+```
+
+---
+
+## Fail fast (beginner-friendly rule)
+
+If something is required:
+
+* assert it early
+* write an error that tells the user what to do next
+
+::: callout-warning
+Avoid “mystery stack traces” that don’t mention which column/path is wrong.
+:::
+
+---
+
+## Micro-exercise: improve an error (5 minutes)
+
+Bad error:
+
+* “KeyError: 'age'”
+
+Rewrite it as a helpful message.
+
+**Checkpoint:** one improved error message.
+
+---
+
+## Solution: helpful error
+
+Example:
+
+* “Missing required feature columns: ['age']
+  Check your input file and your schema.”
+
+---
+
+## Quick Check
+
+**Question:** What’s the difference between `models/` and `outputs/`?
+
+. . .
+
+**Answer:** `models/` stores versioned run artifacts; `outputs/` is scratch output.
+
+---
+
+## Checkpoint
+
+Raise your hand when:
+
+* `ml-baseline --help` runs on your machine
+* you can explain what a CLI command is
+* you know where the feature table lives
+
+---
+
+## Session 3 recap
+
+* CLI makes work repeatable and gradable
+* Typer maps Python functions to commands + flags
+* Follow standards: paths, logging, and predictable outputs
+
+# Isha break {.splash}
+
+## 20 minutes
+
+**When you return:** you will build Day 1 deliverables (CLI + sample data + model card draft).
+
+# Hands-on
+
+::: {.muted}
+Build: Day 1 deliverables (data contract + CLI skeleton)
+:::
+
+---
+
+## Hands-on success criteria (today)
+
+By the end, you should have:
+
+* `uv run ml-baseline --help` works
+* `uv run ml-baseline make-sample-data` writes `data/processed/features.csv`
+* `reports/model_card.md` exists with a draft spec (UoA + target + metric)
+
+**Stretch (optional):**
+
+* If `pyarrow` is installed, also write `data/processed/features.parquet`
+
+---
+
+## Project layout (today’s touch points)
+
+```text
+src/ml_baseline/cli.py         # commands
+src/ml_baseline/sample_data.py # sample feature table
+src/ml_baseline/io.py          # CSV/Parquet helpers
+data/processed/                # outputs written here
+reports/model_card.md          # you create this today
+```
+
+---
+
+## Task 1 — Setup + sanity check (15 minutes)
+
+1. Create the environment
+2. Run the CLI help
+3. Run tests once
+
+**Checkpoint:** `pytest` passes and `ml-baseline --help` prints commands.
+
+---
+
+## Hint — common setup issues
+
+* Make sure you are in the repo root (where `pyproject.toml` is)
+* If tests fail: read the **first** error line that mentions your code
+* If `ml-baseline` is “not found”: run through `uv run …`
+
+---
+
+## Solution — setup commands
+
+**macOS/Linux**
+
+```bash
+uv sync
+uv run ml-baseline --help
+uv run pytest
+```
+
+**Windows PowerShell**
+
+```powershell
+uv sync
+uv run ml-baseline --help
+uv run pytest
+```
+
+---
+
+## Task 2 — Generate sample data (15 minutes)
+
+1. Run `make-sample-data`
+2. Confirm `data/processed/features.csv` exists
+3. Print the first 5 rows (CSV)
+
+**Checkpoint:** you can see the column names + 5 rows printed.
+
+---
+
+## Solution — generate + inspect (CSV)
+
+**macOS/Linux**
+
+```bash
+uv run ml-baseline make-sample-data
+ls data/processed
+python -c "import pandas as pd; print(pd.read_csv('data/processed/features.csv').head())"
+```
+
+**Windows PowerShell**
+
+```powershell
+uv run ml-baseline make-sample-data
+ls data/processed
+python -c "import pandas as pd; print(pd.read_csv('data/processed/features.csv').head())"
+```
+
+::: callout-warning
+If `features.csv` is missing, do **Task 3** (fix the generator).
+:::
+
+---
+
+## Task 3 — Fix `make-sample-data` to always write CSV (25 minutes)
+
+Open `src/ml_baseline/sample_data.py` and ensure:
+
+* it writes `features.csv` every time
+* it is deterministic (seeded)
+* it returns the CSV path
+
+**Checkpoint:** running `make-sample-data` creates `data/processed/features.csv`.
+
+---
+
+## Hint — where to edit
+
+* Edit: `make_sample_feature_table(...)`
+* Use: `write_tabular(df, path)` from `src/ml_baseline/io.py`
+* Don’t forget: `data/processed/` directory creation
+
+---
+
+## Solution — write CSV + optional Parquet {.smaller}
+
+import numpy as np
+import pandas as pd
+from pathlib import Path
+from .config import Paths
+from .io import parquet_supported, write_tabular
+
+def make_sample_feature_table(*, root: Path | None = None, n_users: int = 50, seed: int = 42) -> Path:
+paths = Paths.from_repo_root() if root is None else Paths(root=root)
+paths.data_processed_dir.mkdir(parents=True, exist_ok=True)
+
+```
+rng = np.random.default_rng(seed)
+df = pd.DataFrame({"user_id": [f"u{i:03d}" for i in range(1, n_users + 1)],
+                   "country": rng.choice(["US", "CA", "GB"], size=n_users),
+                   "n_orders": rng.integers(1, 10, size=n_users)})
+df["avg_amount"] = rng.normal(10, 3, size=n_users).clip(min=1).round(2)
+df["total_amount"] = (df["n_orders"] * df["avg_amount"]).round(2)
+df["is_high_value"] = (df["total_amount"] >= 80).astype(int)
+
+csv_path = paths.data_processed_dir / "features.csv"
+write_tabular(df, csv_path)
+if parquet_supported():
+    write_tabular(df, paths.data_processed_dir / "features.parquet")
+return csv_path
+```
+
+---
+
+## Task 4 — Create `reports/model_card.md` + dataset contract (25 minutes)
+
+1. Create `reports/model_card.md`
+2. Paste the template
+3. Fill at least:
+
+   * unit of analysis
+   * target + positive class (if binary)
+   * ID passthrough columns
+   * primary metric (pick one)
+
+**Checkpoint:** file exists and has real text (not only placeholders).
+
+---
+
+## Solution — model card template (part 1) {.smaller}
+
+```markdown
+# Model Card — Week 3 Baseline
+
+## Problem
+- Predict: <target> for <unit of analysis>
+- Decision enabled: <what action changes?>
+- Constraints: CPU-only; offline-first; batch inference
+
+## Data (contract)
+- Feature table: data/processed/features.<csv|parquet>
+- Unit of analysis: <one row per ...>
+- Target column: <name>, positive class: <...> (if binary)
+- Optional IDs (passthrough): <list>
+```
+
+---
+
+## Solution — model card template (part 2) {.smaller}
+
+```markdown
+## Splits (draft for now)
+- Holdout strategy: random stratified (default) / time / group
+- Leakage risks: <what could leak?>
+
+## Metrics (draft for now)
+- Primary: <metric> (why it matches the decision)
+- Baseline: dummy model must be reported
+
+## Shipping
+- Artifacts: model + schema + metrics + holdout tables + env snapshot
+- Known limitations: <where will it fail?>
+- Monitoring sketch: <what would you watch?>
+```
+
+---
+
+## What not to commit (quick rule)
+
+Do **not** commit:
+
+* `outputs/` (scratch)
+* large generated datasets under `data/processed/` (unless asked)
+
+Do commit:
+
+* code under `src/`
+* `reports/model_card.md`
+
+---
+
+## Task 5 — Git checkpoint (2 minutes)
+
+* `git status`
+* commit message: `day1: data contract + sample data`
+* push to GitHub
+
+**Checkpoint:** your new commit is visible on GitHub.
+
+---
+
+## Solution — Git commands
+
+```bash
+git status
+git add -A
+git commit -m "day1: data contract + sample data"
+git push
+```
+
+---
+
+## Task 6 (stretch) — Parquet support (15 minutes)
+
+If your machine can install `pyarrow`:
+
+1. Install the extra
+2. Re-run `make-sample-data`
+3. Confirm `features.parquet` exists **and** `features.csv` still exists
+
+**Checkpoint:** both files exist under `data/processed/`.
+
+---
+
+## Solution — enable Parquet
+
+**macOS/Linux**
+
+```bash
+uv sync --extra parquet
+uv run ml-baseline make-sample-data
+ls data/processed
+```
+
+**Windows PowerShell**
+
+```powershell
+uv sync --extra parquet
+uv run ml-baseline make-sample-data
+ls data/processed
+```
+
+::: callout-warning
+If Parquet install fails, stay on CSV. Do not block your progress.
+:::
+
+---
+
+## Debug playbook (when you’re stuck)
+
+1. Re-run the command
+2. Read the **first** error line that mentions your code
+3. Identify:
+
+   * which file?
+   * which line?
+   * which missing column/path?
+4. Fix one small thing
+5. Re-run tests
+
+---
+
+## Stretch goals (optional)
+
+* Add 1 new feature to the sample feature table (still deterministic)
+* Add a simple QA check (e.g., duplicates by `user_id`)
+* Add `reports/model_card.md` “limitations” section with 2 real risks
+
+---
+
+## Exit Ticket
+
+In 1–2 sentences:
+
+**What is an “input schema contract”, and why does it matter?**
+
+---
+
+## What to do after class (Day 1 assignment)
+
+**Due:** before tomorrow’s class
+
+1. Push your repo to GitHub (public)
+2. Ensure these commands work:
+
+   * `uv run ml-baseline --help`
+   * `uv run ml-baseline make-sample-data`
+3. Commit `reports/model_card.md` draft
+
+**Deliverable:** GitHub URL with at least 1 Day 1 commit.
+
+::: callout-tip
+Commit small and often. Your future self will thank you.
+:::
+
+# Thank You! {.splash}
+
+<div style="width: 300px">{{< brand logo full >}}</div>
