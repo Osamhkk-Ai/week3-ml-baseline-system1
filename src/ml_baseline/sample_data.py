@@ -6,10 +6,12 @@ import numpy as np
 import pandas as pd
 
 from .config import Paths
-from .io import best_effort_ext, write_tabular
+from .io import write_tabular
 
 
-def make_sample_feature_table(*, root: Path | None = None, n_users: int = 50, seed: int = 42) -> Path:
+def make_sample_feature_table(
+    *, root: Path | None = None, n_users: int = 50, seed: int = 42
+) -> Path:
     """Write a small, deterministic feature table for local demos."""
     paths = Paths.from_repo_root() if root is None else Paths(root=root)
     paths.data_processed_dir.mkdir(parents=True, exist_ok=True)
@@ -37,4 +39,11 @@ def make_sample_feature_table(*, root: Path | None = None, n_users: int = 50, se
 
     out_path = paths.data_processed_dir / "features.csv"
     write_tabular(df, out_path)
+
+    try:
+        parquet_path = paths.data_processed_dir / "features.parquet"
+        df.to_parquet(parquet_path)
+    except Exception:
+        pass
+
     return out_path
