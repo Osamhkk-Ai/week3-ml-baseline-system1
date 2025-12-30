@@ -31,3 +31,9 @@ outputs/
 data/cache/
 data/processed/
 models/runs/
+
+
+
+# Ignore specific notebook / docs
+tt.ipynb
+D1.qmd
