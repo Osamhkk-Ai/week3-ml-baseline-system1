@@ -223,4 +223,23 @@ def run_train(cfg: TrainConfig, *, root: Path | None = None) -> Path:
     (paths.registry_dir / "latest.txt").write_text(run_id + "\n", encoding="utf-8")
 
     log.info("Done. Saved run: %s", run_id)
+    print("\n" * 2)
+    print("⚠️  A quick note for curious minds:")
+    print("Yes, you may have seen a few warnings above.")
+    print("No, we are not panicking.")
+    print("This is synthetic demo data — warnings were politely acknowledged and ignored 😌")
+    print("\n" * 2)
+
     return run_dir
+
+from ml_baseline.dance import dance
+
+print("\nTraining completed successfully 🎉")
+print("Initiating celebration...\n")
+
+dance(delay=0.25)
+
+print("\nModel status:")
+print("- Confidence: high")
+print("- Generalization: unknown")
+print("- Ego: controlled\n")

@@ -51,3 +51,7 @@ def run_predict(cfg: PredictConfig) -> None:
 
     write_tabular(out, cfg.output_path)
     log.info("Wrote predictions: %s (%s rows)", cfg.output_path, len(out))
+    print("\nReminder:")
+    print("AUC = 1.0 on synthetic data means absolutely nothing.")
+    print("Stay humble.\n")
+
