@@ -18,13 +18,17 @@ This repo is designed to be:
 uv sync
 ```
 
+---
+
 ### 2) Create sample data (if needed)
 ```bash
 uv run ml-baseline make-sample-data
 ```
 
 This writes a small demo feature table to:
-- `data/processed/features.csv` (and `.parquet` if available)
+- `data/processed/features.csv`
+
+---
 
 ### 3) Train a baseline model
 ```bash
@@ -32,25 +36,51 @@ uv run ml-baseline train --target is_high_value
 ```
 
 Artifacts are written to:
-- `models/runs/<run_id>/...`
+- `models/runs/<run_id>/`
 - `models/registry/latest.txt` points to the most recent run
+
+---
 
 ### 4) Batch predict
 ```bash
-uv run ml-baseline predict --run latest --input data/processed/features.csv --output outputs/preds.csv
+uv run ml-baseline predict   --run latest   --input models/runs/<run_id>/tables/holdout_input.csv   --output outputs/holdout_preds.csv
 ```
+
+**Note:** inference inputs must not include the target column (`is_high_value`).
+
+---
 
 ### 5) Tests
 ```bash
 uv run pytest
 ```
 
+All tests must pass before submission.
+
+---
+
+## Artifacts
+
+- Trained model and run metadata:  
+  `models/runs/<run_id>/`
+- Holdout evaluation metrics:  
+  `models/runs/<run_id>/metrics/holdout_metrics.json`
+- Input schema (feature contract):  
+  `models/runs/<run_id>/schema/input_schema.json`
+- Batch predictions:  
+  `outputs/holdout_preds.csv`
+
 ---
 
 ## What you submit
 - working code (`src/`)
 - passing tests (`tests/`)
-- updated `reports/model_card.md` (filled in)
-- updated `reports/eval_summary.md` (filled in)
+- filled `reports/model_card.md`
+- filled `reports/eval_summary.md`
 
-See `architecture.md` for minimum requirements + stretch goals.
+---
+
+## Notes
+- Training data may include the target column.
+- Inference inputs **must not** include the target.
+- This system is intended as a baseline reference, not a production model.

@@ -1,13 +1,13 @@
 from pathlib import Path
 
+import pandas as pd
+import pytest
+
 from ml_baseline.config import PredictConfig, TrainConfig
 from ml_baseline.predict import run_predict
 from ml_baseline.sample_data import make_sample_feature_table
-from ml_baseline.train import run_train
-
-import pandas as pd
-import pytest
 from ml_baseline.schema import InputSchema, validate_and_align
+from ml_baseline.train import run_train
 
 
 def test_train_and_predict(tmp_path: Path) -> None:
@@ -32,17 +32,19 @@ def test_train_and_predict(tmp_path: Path) -> None:
     pcfg = PredictConfig(run_dir=run_dir, input_path=holdout_input, output_path=out_path)
     run_predict(pcfg)
 
-
-
-
     assert out_path.exists()
 
 
 def test_validate_and_align_forbidden_column() -> None:
-    schema = InputSchema(required_feature_columns=["a", "b"],feature_dtypes={"a": "int64", "b": "int64"}, forbidden_columns=["y"])
+    schema = InputSchema(
+        required_feature_columns=["a", "b"],
+        feature_dtypes={"a": "int64", "b": "int64"},
+        forbidden_columns=["y"],
+    )
     df = pd.DataFrame({"a": [1, 2], "y": [0, 1]})
     with pytest.raises(AssertionError, match="Forbidden columns"):
         validate_and_align(df, schema)
+
 
 def test_validate_and_align_missing_required_column() -> None:
     schema = InputSchema(
